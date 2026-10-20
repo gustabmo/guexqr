@@ -1,0 +1,24 @@
+name: Deploy site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.GUEXQR_WEB_DEPLOY_KEY }}
+          external_repository: ersge-gustavo/ersge-gustavo.github.io
+          publish_branch: main
+          publish_dir: ./web
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
