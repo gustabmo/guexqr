@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+
+
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERSGE Informatique 11e classe - Gustavo Exel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+
+        .top-right-content {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 400px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 6px;
+            z-index: 10;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .main-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Main iframe that covers the entire screen -->
+        <iframe 
+            src="" 
+            class="main-iframe"
+            title="Main Content">
+        </iframe>
+        
+        <!-- Top-right content that appears over the iframe -->
+        <div class="top-right-content" id="topRightPanel">
+            <button onclick="loadPage(parseInt(currPage)-1);">&nbsp;&nbsp;&lt;&lt;&nbsp;&nbsp;</button>
+            <button onclick="loadPage(parseInt(currPage)+1);">&nbsp;&nbsp;<b>&gt;&gt;</b>&nbsp;&nbsp;</button>
+            <span id='spanNumPage' style="font-size:12px"></span>
+			<span id='spanPageTitle' style="font-size:12px"></span>
+			(<span id='spanIdBrowser' style="font-size:10px"></span>)
+        </div>
+    </div>
+
+    <script src='./pages.js'></script>
+    <script src='./gutil.js'></script>
+
+    <script>
+	    // 2024-11-26 by gustavo.exel@ersge.ch guexel@gmail.com
+
+        textCurrPage = getParamFromURL('page');
+        if ((textCurrPage == null) || (textCurrPage == "")) {
+            currPage = 0;
+        } else {
+            currPage = parseInt ( textCurrPage );
+        }
+        loadPage(currPage);
+
+        function loadPage ( newPage ) {
+            currPage = newPage || 0;
+
+            const url = new URL(location);
+            url.searchParams.set("page", currPage);
+            history.pushState({}, "", url);
+
+            let idBrowser = getIdBrowser();
+            let pageData = getPage ( currPage );
+
+            spanNumPage.innerHTML = currPage;
+            spanIdBrowser.innerHTML = idBrowser;
+
+            let frame = document.querySelector('.main-iframe');
+
+
+            if ((pageData==null) || (pageData[1] == "") || (pageData[3] == "")) {
+                spanPageTitle.innerHTML = null;
+
+                frame.setAttribute('title','Page inexistante');
+                frame.setAttribute('src','inexistante.html');
+
+            } else {
+                spanPageTitle.innerHTML = pageData[0];
+
+                frame.setAttribute('title',pageData[0]);
+
+                if (pageData[2] && (getCookie ( pageData[1] ) == null)) {
+                    frame.setAttribute ( 'src', './requestcode.html?code='+pageData[1]+'&np='+currPage );
+                } else {
+                    frame.setAttribute ( 'src', pageData[3]+"?embedded=true" );
+                }
+            }
+
+            return false;
+        }
+
+        function changeIframe() {
+            const iframe = document.querySelector('.main-iframe');
+            const urls = [
+                'https://www.example.com',
+                'https://www.wikipedia.org',
+                'https://www.github.com'
+            ];
+            const currentSrc = iframe.src;
+            const currentIndex = urls.indexOf(currentSrc);
+            const nextIndex = (currentIndex + 1) % urls.length;
+            iframe.src = urls[nextIndex];
+        }
+
+        // Optional: Handle iframe load events
+        document.querySelector('.main-iframe').addEventListener('load', function() {
+            console.log('Iframe loaded successfully');
+        });
+    </script>
+</body>
+</html>
+
