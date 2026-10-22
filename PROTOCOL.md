@@ -13,7 +13,7 @@ Three parts:
 | `Config`   | `A2` = `CourseInUse`, `B2` = name of the course in use (e.g. `js2026`) |
 | `<course>` | one tab per course, named like the course (e.g. `js2026`): the page list |
 | `Requests` | pending access requests (managed by the backend only) |
-| `Log`      | one row per page allowed |
+| `Log`      | one row per allowed page |
 
 ### `<course>` tab (page list)
 
@@ -27,7 +27,7 @@ Row 1 = headers. Row order gives the page number, 0-based: row 2 = page #0.
 | D      | `url`    | Google Docs published URL |
 
 A page's number is always derived from its position in this list.
-A page code found in `Log` but no longer in the list is shown as `#n/a`.
+A page code found in `Log` but no longer in the list shows `#n/a` instead of its number.
 
 ### `Requests` tab
 
@@ -36,18 +36,17 @@ A page code found in `Log` but no longer in the list is shown as `#n/a`.
 | A      | `requested`    | server time when the request was made |
 | B      | `course`       | |
 | C      | `requestId`    | 10 random digits, as text |
-| D      | `browser`      | browser ID (cookie) |
-| E      | `student`      | name as typed (normalized, see §4) |
-| F      | `page`         | page code the request is for |
-| G      | `state`        | see §3 |
-| H      | `target`       | page code to move to (state `moving` only) |
-| I      | `stateChanged` | server time of the last state change |
+| D      | `student`      | name as typed (normalized, see §4) |
+| E      | `page`         | page code the request is for |
+| F      | `state`        | see §3 |
+| G      | `target`       | page code to move to (state `movingBack`/`movingForward` only) |
+| H      | `stateChanged` | server time of the last state change |
 
 ### `Log` tab
 
-`logged | course | student | page | browser | requested`
+`logged | course | student | page | requested`
 
-`requested` (column F, was `qrTimestamp`) = when the request was made,
+`requested` = when the request was made,
 so waiting times can be computed later.
 
 ## 2. Transport
@@ -68,19 +67,18 @@ Every call is an HTTP **POST** whose body is a JSON object with an `action` fiel
 
     pending  ──allow──▶  allowing  ──ack──▶  (row deleted, Log row added)
        │
-       ├──back/forward──▶  moving  ──ack──▶  pending (page = target)
+       ├──back/forward──▶  movingBack/movingForward  ──ack──▶  pending (page = target)
        │
        ├──refuseName──▶  refusingName  ──ack──▶  (row deleted)
        │
        └──delete──▶  (row deleted immediately)
 
-- The manager app lists `pending`, `allowing` and `moving` (the last two
-  shown as "waiting for browser").
-- `refusingName` is hidden from the app; it only waits for the browser to read it.
+- The manager app shows the detailed state of each request
 - `delete` needs no browser feedback: the row is removed, and the browser
   learns it through `status` returning `unknown`.
-- While a request is `allowing` or `moving`, only `delete` is accepted.
-- A new `request` from the same browser + course replaces any existing row.
+- While a request is `allowing` or `movingBack` or `movingForward` or `refusingName`, only `delete` is accepted.
+- A new `request` from the same student + course replaces any existing row.
+- The browser keeps its pending `requestId` in `sessionStorage`, so a reload resumes polling instead of sending a new request.
 
 ## 4. Student names
 
@@ -99,7 +97,7 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 `url` is included only for pages with `locked: false`.
 
 ### `request`
-`{"action": "request", "course", "requestId", "browser", "student", "page"}`
+`{"action": "request", "course", "requestId", "student", "page"}`
 → `{"ok": true}`
 
 ### `status`
@@ -110,7 +108,8 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 |----------------|---------------------------|--------------|
 | `pending`      |                           | keep polling |
 | `allowing`     | `url`                     | store unlock + URL + `studentName` cookie, then `ack` |
-| `moving`       | `target`, `targetNum`     | `ack`, then go to that page and keep polling |
+| `movingBack`   | `target`, `targetNum`     | `ack`, then go to that page and keep polling |
+| `movingForward`| `target`, `targetNum`     | `ack`, then go to that page and keep polling |
 | `refusingName` |                           | `ack`, show the name field, re-enable the button |
 | `unknown`      |                           | (deleted) re-enable the button |
 
