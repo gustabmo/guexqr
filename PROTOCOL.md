@@ -29,6 +29,17 @@ Row 1 = headers. Row order gives the page number, 0-based: row 2 = page #0.
 A page's number is always derived from its position in this list.
 A page code found in `Log` but no longer in the list shows `#n/a` instead of its number.
 
+Pages are identified **only by their code**, never by their number:
+
+- The student page URL carries only the code: `...?code=BtnOnClick` (no `np`).
+- Unlocks, requests and `Log` rows all store the code.
+- The browser fetches the list (`pages`) on every page load, so changes made in
+  the Sheet apply on the next page a student opens, with no deploy. Inserting,
+  removing or reordering pages never invalidates an unlock or a pending request.
+- An open page is not refreshed by itself; it sees changes on the next
+  navigation or reload.
+- A code that is no longer in the list shows a "page not found" page.
+
 ### `Requests` tab
 
 | Column | Header         | Notes |
@@ -36,7 +47,7 @@ A page code found in `Log` but no longer in the list shows `#n/a` instead of its
 | A      | `requested`    | server time when the request was made |
 | B      | `course`       | |
 | C      | `requestId`    | 10 random digits, as text |
-| D      | `student`      | name as typed (normalized, see §4) |
+| D      | `student`      | name as typed (normalized, see §5) |
 | E      | `page`         | page code the request is for |
 | F      | `state`        | see §3 |
 | G      | `target`       | page code to move to (state `movingBack`/`movingForward` only) |
@@ -80,12 +91,29 @@ Every call is an HTTP **POST** whose body is a JSON object with an `action` fiel
 - A new `request` from the same student + course replaces any existing row.
 - The browser keeps its pending `requestId` in `sessionStorage`, so a reload resumes polling instead of sending a new request.
 
-## 4. Student names
+## 4. Auto-unlock
+
+A locked page that this browser has not unlocked is unlocked without a
+request when **both**:
+
+1. the browser has a `studentName` cookie (written only on `allow`, i.e. a name
+   the teacher confirmed on this computer) — a name typed in the field never
+   triggers it;
+2. `Log` already has a row for this course + student (case-insensitive) + page.
+
+The browser then calls `autoUnlock` (§6) and, on success, stores the unlock and
+URL as on `allow`. No request is created and no `Log` row is added.
+
+Known limitation, accepted: on a shared computer the cookie holds the last
+student allowed there; another student sitting there gets that student's
+already-logged pages. The name is shown in large letters on the page.
+
+## 5. Student names
 
 Before storing or comparing: trim, then collapse internal whitespace to one space.
 Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 
-## 5. Actions — student page (no key)
+## 6. Actions — student page (no key)
 
 ### `config`
 → `{"ok": true, "course": "js2026"}`
@@ -108,8 +136,8 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 |----------------|---------------------------|--------------|
 | `pending`      |                           | keep polling |
 | `allowing`     | `url`                     | store unlock + URL + `studentName` cookie, then `ack` |
-| `movingBack`   | `target`, `targetNum`     | `ack`, then go to that page and keep polling |
-| `movingForward`| `target`, `targetNum`     | `ack`, then go to that page and keep polling |
+| `movingBack`   | `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
+| `movingForward`| `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
 | `refusingName` |                           | `ack`, show the name field, re-enable the button |
 | `unknown`      |                           | (deleted) re-enable the button |
 
@@ -117,7 +145,11 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 `{"action": "ack", "course", "requestId", "state"}` — `state` = the state being acknowledged
 → `{"ok": true}`
 
-## 6. Actions — manager app (require `"key"`)
+### `autoUnlock`
+`{"action": "autoUnlock", "course", "student", "page"}` — `student` from the cookie (see §4)
+→ `{"ok": true, "unlocked": true, "url": "..."}` or `{"ok": true, "unlocked": false}`
+
+## 7. Actions — manager app (require `"key"`)
 
 The key is stored as script property `MANAGER_KEY` and in the app's
 untracked config file; never in the repo.
