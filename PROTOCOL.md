@@ -11,7 +11,7 @@ Three parts:
 | Tab        | Content |
 |------------|---------|
 | `Config`   | `A2` = `CourseInUse`, `B2` = name of the course in use (e.g. `js2026`) |
-| `<course>` | one tab per course, named like the course (e.g. `js2026`): the page list |
+| `<course>` | one tab per course, named like the course (e.g. `js2026`): the page list. Course names Config, Requests, Log are reserved. |
 | `Requests` | pending access requests (managed by the backend only) |
 | `Log`      | one row per allowed page |
 
