@@ -15,7 +15,7 @@ function doPost(e) {
     if (MANAGER_ACTIONS.indexOf(action) >= 0) {
       const mykey = PropertiesService.getScriptProperties().getProperty('MANAGER_KEY');
       if (!mykey) throw new Error('no key stored in properties');
-      if (req.key !== key) throw new Error('bad key');
+      if (req.key !== mykey) throw new Error('bad key');
     }
     if (action !== 'config' && !req.course) throw new Error('missing course');
 

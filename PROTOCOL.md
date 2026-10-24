@@ -62,7 +62,7 @@ so waiting times can be computed later.
 
 ## 2. Transport
 
-Single URL (Apps Script web app `/exec`, kept out of the repo).
+The URL is public (it’s in web/); the manager actions require the key.
 Every call is an HTTP **POST** whose body is a JSON object with an `action` field.
 
 - Send the body with `Content-Type: text/plain`. With `application/json`
