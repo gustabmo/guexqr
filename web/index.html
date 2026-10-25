@@ -1,146 +1,394 @@
 <!DOCTYPE html>
-
-
-
-
-
-<html lang="en">
+<html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ERSGE Informatique 11e classe - Gustavo Exel</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERSGE Informatique - Gustavo Exel</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { height: 100vh; overflow: hidden; font-family: Arial, sans-serif; background: #fff; color: #222; }
 
-        body {
-            height: 100vh;
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-        }
+  #panel {
+    position: absolute; top: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 8px;
+    max-width: 60vw; padding: 6px 10px;
+    background: rgba(255,255,255,0.95); border: 2px solid #333; border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2); font-size: 13px;
+  }
+  #panel button { padding: 2px 10px; font-weight: bold; }
+  #panelTitle { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #panelStudent { font-weight: bold; white-space: nowrap; }
 
-        .container {
-            position: relative;
-            width: 100%;
-            height: 100vh;
-        }
+  #doc { position: absolute; inset: 0; width: 100%; height: 100%; border: none; z-index: 1; }
 
-        .top-right-content {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 400px;
-            height: 50px;
-            background-color: rgba(255, 255, 255, 0.95);
-            border: 2px solid #333;
-            border-radius: 8px;
-            padding: 6px;
-            z-index: 10;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .main-iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-            z-index: 1;
-        }
-    </style>
+  .screen {
+    position: absolute; inset: 0; z-index: 2; background: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3vh; text-align: center; padding: 60px 20px 20px;
+  }
+  #reqTitle { font-size: 3vh; color: #555; }
+  #reqNumber { line-height: 1; }
+  #reqBig { font-size: 28vh; font-weight: bold; letter-spacing: 1vh; }
+  #reqSmall { font-size: 3vh; color: #777; margin-left: 1vh; font-family: monospace; }
+  #reqName { font-size: 9vh; font-weight: bold; }
+  #reqNameInput { font-size: 6vh; padding: 1vh 2vh; width: min(80vw, 22ch); text-align: center; }
+  #reqButton { font-size: 4vh; padding: 1.5vh 4vh; border-radius: 1vh; border: none;
+               background: #2a7; color: #fff; cursor: pointer; }
+  #reqButton:disabled { background: #bbb; cursor: default; }
+  #reqStatus { font-size: 3vh; min-height: 4vh; color: #555; }
+  #reqStatus.error { color: #c22; }
+  #loading { font-size: 4vh; color: #777; }
+  [hidden] { display: none !important; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <!-- Main iframe that covers the entire screen -->
-        <iframe 
-            src="" 
-            class="main-iframe"
-            title="Main Content">
-        </iframe>
-        
-        <!-- Top-right content that appears over the iframe -->
-        <div class="top-right-content" id="topRightPanel">
-            <button onclick="loadPage(parseInt(currPage)-1);">&nbsp;&nbsp;&lt;&lt;&nbsp;&nbsp;</button>
-            <button onclick="loadPage(parseInt(currPage)+1);">&nbsp;&nbsp;<b>&gt;&gt;</b>&nbsp;&nbsp;</button>
-            <span id='spanNumPage' style="font-size:12px"></span>
-			<span id='spanPageTitle' style="font-size:12px"></span>
-			(<span id='spanIdBrowser' style="font-size:10px"></span>)
-        </div>
-    </div>
 
-    <script src='./pages.js'></script>
-    <script src='./gutil.js'></script>
+<div id="panel">
+  <button id="btnPrev" title="Page précédente">&lt;&lt;</button>
+  <button id="btnNext" title="Page suivante">&gt;&gt;</button>
+  <span id="panelTitle"></span>
+  <span id="panelStudent"></span>
+</div>
 
-    <script>
-	    // 2024-11-26 by gustavo.exel@ersge.ch guexel@gmail.com
+<iframe id="doc" title="Contenu"></iframe>
 
-        textCurrPage = getParamFromURL('page');
-        if ((textCurrPage == null) || (textCurrPage == "")) {
-            currPage = 0;
-        } else {
-            currPage = parseInt ( textCurrPage );
-        }
-        loadPage(currPage);
+<div id="request" class="screen" hidden>
+  <div id="reqTitle"></div>
+  <div id="reqNumber"><span id="reqBig"></span><span id="reqSmall"></span></div>
+  <div id="reqName"></div>
+  <input id="reqNameInput" type="text" placeholder="Ton prénom" autocomplete="off">
+  <button id="reqButton">Demander l'accès</button>
+  <div id="reqStatus"></div>
+</div>
 
-        function loadPage ( newPage ) {
-            currPage = newPage || 0;
+<div id="loading" class="screen" hidden>Chargement…</div>
 
-            const url = new URL(location);
-            url.searchParams.set("page", currPage);
-            history.pushState({}, "", url);
+<script src="./gutil.js"></script>
+<script>
+// guexqr student page — see PROTOCOL.md at the repo root.
 
-            let idBrowser = getIdBrowser();
-            let pageData = getPage ( currPage );
+const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwsj2U7jJg6-qRstvqPfbawVnZKoKTcN1BtsmjYpY0hbqPfzEZX75mHVBrpTVVtU4xP/exec';
+const POLL_MS = 3000;
 
-            spanNumPage.innerHTML = currPage;
-            spanIdBrowser.innerHTML = idBrowser;
+let course = null;      // course in use
+let pages = null;       // current page list (cached, then refreshed)
+let shown = null;       // what is on screen: { kind, page, url }
+let navId = 0;          // newest navigation; older refreshes are ignored
+let formRequestId = null;
+let nameRefused = null; // name to put back in the field after "refuse name"
+let pollTimer = null;
 
-            let frame = document.querySelector('.main-iframe');
+// ---------- storage (all wrapped: may be unavailable) ----------
 
+function store(kind) { try { return kind === 'local' ? localStorage : sessionStorage; } catch (e) { return null; } }
+function getJSON(kind, key) { try { return JSON.parse(store(kind).getItem(key)); } catch (e) { return null; } }
+function setJSON(kind, key, v) { try { store(kind).setItem(key, JSON.stringify(v)); } catch (e) {} }
+function remove(kind, key) { try { store(kind).removeItem(key); } catch (e) {} }
 
-            if ((pageData==null) || (pageData[1] == "") || (pageData[3] == "")) {
-                spanPageTitle.innerHTML = null;
+function confirmedStudent() { return getCookie('studentName'); }
+function setStudentCookie(name) {
+  document.cookie = 'studentName=' + encodeURIComponent(name) + '; path=/; max-age=31536000; SameSite=Lax';
+}
+function deleteStudentCookie() { document.cookie = 'studentName=; path=/; max-age=0'; }
 
-                frame.setAttribute('title','Page inexistante');
-                frame.setAttribute('src','inexistante.html');
+// After the confirmed name changes, forget the URLs of locked pages (they were for the old name).
+function resetUnlocks() {
+  if (pages) pages = pages.map(p => p.locked ? Object.assign({}, p, { url: undefined }) : p);
+}
 
-            } else {
-                spanPageTitle.innerHTML = pageData[0];
+function pagesKey() { return 'guexqr.pages.' + course + '.' + (confirmedStudent() || ''); }
+function getPending() { return getJSON('session', 'guexqr.pending'); }
+function setPending(p) { if (p) setJSON('session', 'guexqr.pending', p); else remove('session', 'guexqr.pending'); }
 
-                frame.setAttribute('title',pageData[0]);
+// ---------- backend ----------
 
-                if (pageData[2] && (getCookie ( pageData[1] ) == null)) {
-                    frame.setAttribute ( 'src', './requestcode.html?code='+pageData[1]+'&np='+currPage );
-                } else {
-                    frame.setAttribute ( 'src', pageData[3]+"?embedded=true" );
-                }
-            }
+async function api(action, params) {
+  const res = await fetch(BACKEND_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },      // no CORS preflight
+    body: JSON.stringify(Object.assign({ action: action }, params || {}))
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'erreur');
+  return data;
+}
 
-            return false;
-        }
+async function fetchPages() {
+  const params = { course: course };
+  const student = confirmedStudent();
+  if (student) params.student = student;          // only a confirmed name, never a typed one
+  const data = await api('pages', params);
+  setJSON('local', pagesKey(), data.pages);
+  return data.pages;
+}
 
-        function changeIframe() {
-            const iframe = document.querySelector('.main-iframe');
-            const urls = [
-                'https://www.example.com',
-                'https://www.wikipedia.org',
-                'https://www.github.com'
-            ];
-            const currentSrc = iframe.src;
-            const currentIndex = urls.indexOf(currentSrc);
-            const nextIndex = (currentIndex + 1) % urls.length;
-            iframe.src = urls[nextIndex];
-        }
+// ---------- navigation ----------
 
-        // Optional: Handle iframe load events
-        document.querySelector('.main-iframe').addEventListener('load', function() {
-            console.log('Iframe loaded successfully');
-        });
-    </script>
+// intent: { code } (code may be null = first page) or { from, delta }
+function resolve(intent, list) {
+  if (!list || list.length === 0) return { kind: 'missing', page: null };
+  let page;
+  if ('delta' in intent) {
+    const from = list.find(p => p.page === intent.from);
+    page = from ? list[from.num + intent.delta] : null;
+  } else {
+    page = intent.code == null ? list[0] : list.find(p => p.page === intent.code);
+  }
+  if (!page) return { kind: 'missing', page: null, code: intent.code };
+  return page.url ? { kind: 'doc', page: page, url: page.url } : { kind: 'request', page: page };
+}
+
+function sameView(a, b) {
+  return a && b && a.kind === b.kind && (a.url || '') === (b.url || '') &&
+         (a.page ? a.page.page + a.page.title + a.page.num : '') ===
+         (b.page ? b.page.page + b.page.title + b.page.num : '');
+}
+
+// Show from the cached list at once, then correct it when the fresh list arrives.
+function go(intent, push) {
+  const id = ++navId;
+  if (pages) show(resolve(intent, pages), push);
+  else showLoading();
+  fetchPages().then(fresh => {
+    pages = fresh;
+    if (id !== navId) return;                     // the student navigated again meanwhile
+    const view = resolve(intent, fresh);
+    if (!sameView(view, shown)) show(view, push && !shown);
+    else updatePanel();
+  }).catch(err => {
+    if (id === navId && !pages) showLoadError(err);
+  });
+}
+
+function show(view, push) {
+  shown = view;
+  const url = new URL(location);
+  if (view.page) url.searchParams.set('code', view.page.page);
+  if (url.href !== location.href) {
+    if (push) history.pushState({}, '', url); else history.replaceState({}, '', url);
+  }
+  document.getElementById('loading').hidden = true;
+  const frame = document.getElementById('doc');
+  const req = document.getElementById('request');
+
+  if (view.kind === 'doc') {
+    req.hidden = true;
+    const src = view.url + (view.url.includes('?') ? '&' : '?') + 'embedded=true';
+    if (frame.getAttribute('src') !== src) frame.setAttribute('src', src);
+    frame.title = view.page.title;
+  } else if (view.kind === 'missing') {
+    req.hidden = true;
+    if (frame.getAttribute('src') !== 'inexistante.html') frame.setAttribute('src', 'inexistante.html');
+    frame.title = 'Page inexistante';
+  } else {
+    frame.removeAttribute('src');
+    req.hidden = false;
+    renderRequest();
+  }
+  updatePanel();
+}
+
+function showLoading() {
+  document.getElementById('request').hidden = true;
+  document.getElementById('loading').hidden = false;
+  document.getElementById('loading').textContent = 'Chargement…';
+}
+
+function showLoadError(err) {
+  const el = document.getElementById('loading');
+  el.hidden = false;
+  el.textContent = 'Impossible de charger la liste des pages (' + err.message + '). Recharge la page.';
+}
+
+function updatePanel() {
+  const p = shown && shown.page;
+  document.getElementById('panelTitle').textContent = p ? '#' + p.num + ' ' + p.title : '';
+  document.getElementById('panelStudent').textContent = confirmedStudent() || '';
+  const n = pages ? pages.length : 0;
+  // on a missing page both buttons lead back to page #0
+  document.getElementById('btnPrev').disabled = p ? p.num <= 0 : n === 0;
+  document.getElementById('btnNext').disabled = p ? p.num >= n - 1 : n === 0;
+}
+
+// ---------- request screen ----------
+
+function newRequestId() {
+  const a = new Uint32Array(2);
+  crypto.getRandomValues(a);
+  return (String(a[0] % 100000).padStart(5, '0') + String(a[1] % 100000).padStart(5, '0'));
+}
+
+function renderRequest() {
+  const page = shown.page;
+  const pending = getPending();
+  const waiting = pending && pending.course === course && pending.page === page.page;
+  const cookieName = confirmedStudent();
+
+  document.getElementById('reqTitle').textContent = '#' + page.num + ' ' + page.title;
+
+  let id;
+  if (waiting) id = pending.requestId;
+  else { if (!formRequestId) formRequestId = newRequestId(); id = formRequestId; }
+  document.getElementById('reqBig').textContent = id.slice(0, 2);
+  document.getElementById('reqSmall').textContent = id;
+
+  const nameEl = document.getElementById('reqName');
+  const input = document.getElementById('reqNameInput');
+  const fixedName = waiting ? pending.student : (nameRefused == null ? cookieName : null);
+  if (fixedName) {
+    nameEl.textContent = fixedName; nameEl.hidden = false; input.hidden = true;
+  } else {
+    nameEl.hidden = true; input.hidden = false;
+    if (nameRefused != null && input.value === '') input.value = nameRefused;
+  }
+
+  setStatus(waiting ? 'Demande envoyée, attends…' : '');
+  updateButton();
+}
+
+function typedName() { return normalizeName(document.getElementById('reqNameInput').value); }
+function normalizeName(s) { return String(s || '').trim().replace(/\s+/g, ' '); }
+
+function updateButton() {
+  const pending = getPending();
+  const waiting = pending && shown && shown.page && pending.page === shown.page.page;
+  const input = document.getElementById('reqNameInput');
+  document.getElementById('reqButton').disabled =
+    !!waiting || (!input.hidden && typedName() === '');
+}
+
+function setStatus(text, isError) {
+  const el = document.getElementById('reqStatus');
+  el.textContent = text;
+  el.classList.toggle('error', !!isError);
+}
+
+async function sendRequest() {
+  const input = document.getElementById('reqNameInput');
+  const student = input.hidden ? document.getElementById('reqName').textContent : typedName();
+  if (!student || !shown || shown.kind !== 'request') return;
+
+  const pending = { course: course, requestId: formRequestId, student: student, page: shown.page.page };
+  setPending(pending);                 // name becomes fixed text; cookie is NOT written yet
+  nameRefused = null;
+  input.value = '';
+  renderRequest();
+  try {
+    await api('request', { course: course, requestId: pending.requestId,
+                           student: student, page: pending.page });
+    formRequestId = null;
+    startPolling();
+  } catch (err) {
+    setPending(null);
+    nameRefused = input.hidden ? null : student;
+    renderRequest();
+    setStatus('Erreur : ' + err.message, true);
+  }
+}
+
+// ---------- polling ----------
+
+function startPolling() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(poll, POLL_MS);
+}
+
+async function poll() {
+  const pending = getPending();
+  if (!pending || pending.course !== course) return;
+  try {
+    const st = await api('status', { course: course, requestId: pending.requestId });
+    await handleStatus(pending, st);
+  } catch (err) {
+    console.log('poll error, will retry', err);
+  }
+  if (getPending()) startPolling();
+}
+
+async function handleStatus(pending, st) {
+  const ack = () => api('ack', { course: course, requestId: pending.requestId, state: st.state });
+
+  if (st.state === 'pending') return;
+
+  if (st.state === 'allowing') {
+    setStudentCookie(pending.student);
+    await ack();
+    setPending(null);
+    resetUnlocks();
+    if (pages) {                                   // unlock at once, the refresh confirms it
+      const p = pages.find(x => x.page === pending.page);
+      if (p) p.url = st.url;
+    }
+    go({ code: shown && shown.page ? shown.page.page : pending.page }, false);
+    return;
+  }
+
+  if (st.state === 'movingBack' || st.state === 'movingForward') {
+    await ack();
+    pending.page = st.target;
+    setPending(pending);
+    go({ code: st.target }, true);
+    return;
+  }
+
+  if (st.state === 'refusingName') {
+    await ack();
+    deleteStudentCookie();
+    resetUnlocks();
+    setPending(null);
+    nameRefused = pending.student;
+    formRequestId = null;
+    go({ code: shown && shown.page ? shown.page.page : pending.page }, false);
+    return;
+  }
+
+  // unknown: the teacher deleted the request
+  setPending(null);
+  formRequestId = null;
+  if (!confirmedStudent()) nameRefused = pending.student;   // give the typed name back
+  if (shown && shown.kind === 'request') { renderRequest(); setStatus('Demande refusée.'); }
+}
+
+// ---------- start ----------
+
+function step(delta) {
+  if (!shown) return;
+  if (shown.page) go({ from: shown.page.page, delta: delta }, true);
+  else go({ code: null }, true);                   // from a missing page: back to #0
+}
+document.getElementById('btnPrev').onclick = () => step(-1);
+document.getElementById('btnNext').onclick = () => step(+1);
+document.getElementById('reqButton').onclick = sendRequest;
+document.getElementById('reqNameInput').oninput = updateButton;
+document.getElementById('reqNameInput').onkeydown = e => { if (e.key === 'Enter') sendRequest(); };
+window.onpopstate = () => go({ code: getParamFromURL('code') }, false);
+
+async function start() {
+  const intent = { code: getParamFromURL('code') };
+  course = getJSON('session', 'guexqr.course');
+  if (course) {
+    pages = getJSON('local', pagesKey());
+    go(intent, false);
+    api('config').then(d => {                      // course changed in the Sheet?
+      if (d.course !== course) {
+        course = d.course; setJSON('session', 'guexqr.course', course);
+        pages = getJSON('local', pagesKey());
+        go(intent, false);
+      }
+    }).catch(() => {});
+  } else {
+    showLoading();
+    try {
+      course = (await api('config')).course;
+      setJSON('session', 'guexqr.course', course);
+    } catch (err) { showLoadError(err); return; }
+    pages = getJSON('local', pagesKey());
+    go(intent, false);
+  }
+  if (getPending()) startPolling();
+}
+
+start();
+</script>
 </body>
 </html>
-
