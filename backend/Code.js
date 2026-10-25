@@ -27,6 +27,10 @@ function doPost(e) {
       case 'request': return okReply(withLock(() => actionRequest(req)));
       case 'status': return okReply(actionStatus(req));
       case 'ack':    return okReply(withLock(() => actionAck(req)));
+      case 'autoUnlock': return okReply(actionAutoUnlock(req));
+      case 'queue':  return okReply(actionQueue(req));
+      case 'history': return okReply(actionHistory(req));
+      case 'act':    return okReply(withLock(() => actionAct(req)));
       default:       throw new Error('unknown action: ' + action);
     }
   } catch (err) {
@@ -34,7 +38,7 @@ function doPost(e) {
   }
 }
 
-// ---------- actions ----------
+// ---------- actions — student page ----------
 
 function actionConfig() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET);
@@ -121,7 +125,115 @@ function actionAck(req) {
   return {};
 }
 
+// Student page: unlock without a request if this student already has this page in Log.
+// "student" must come from the studentName cookie (see PROTOCOL.md, Auto-unlock).
+function actionAutoUnlock(req) {
+  const student = normalizeName(req.student);
+  if (!student) throw new Error('missing student');
+  const page = findPage(getPages(req.course), req.page);
+  if (!page) throw new Error('page not found: ' + req.page);
+  if (!page.locked) return { unlocked: true, url: page.url };
+
+  const logged = getLogRows().some(r =>
+    String(r[LG.course]) === req.course && sameName(r[LG.student], student) &&
+    String(r[LG.page]) === page.page);
+  return logged ? { unlocked: true, url: page.url } : { unlocked: false };
+}
+
+// ---------- actions — manager app ----------
+
+// All requests of the course, oldest first.
+function actionQueue(req) {
+  const pages = getPages(req.course);
+  const requests = getSheet(REQUESTS_SHEET).getDataRange().getValues().slice(1)
+    .filter(r => String(r[RQ.course]) === req.course)
+    .map(r => {
+      const page = findPage(pages, r[RQ.page]);
+      return {
+        requestId: String(r[RQ.requestId]).padStart(10, '0'),
+        student: String(r[RQ.student]),
+        page: String(r[RQ.page]),
+        num: page ? page.num : null,
+        state: String(r[RQ.state]),
+        target: String(r[RQ.target]),
+        requested: r[RQ.requested],
+        stateChanged: r[RQ.stateChanged]
+      };
+    })
+    .sort((a, b) => new Date(a.requested) - new Date(b.requested));
+  return { requests: requests, now: new Date() };
+}
+
+// Last 5 Log rows of a student in the course; if none, the list of known students.
+function actionHistory(req) {
+  const student = normalizeName(req.student);
+  if (!student) throw new Error('missing student');
+  const pages = getPages(req.course);
+  const rows = getLogRows().filter(r => String(r[LG.course]) === req.course);
+
+  const logs = rows.filter(r => sameName(r[LG.student], student)).slice(-5).map(r => {
+    const page = findPage(pages, r[LG.page]);
+    return { page: String(r[LG.page]), num: page ? page.num : null, logged: r[LG.logged] };
+  });
+  const out = { logs: logs, now: new Date() };
+
+  if (logs.length === 0) {
+    const byLower = {};                       // later rows overwrite: most recent spelling wins
+    rows.forEach(r => {
+      const name = normalizeName(r[LG.student]);
+      if (name) byLower[name.toLowerCase()] = name;
+    });
+    out.students = Object.values(byLower)
+      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }
+  return out;
+}
+
+// Teacher's decision on a request.
+function actionAct(req) {
+  const found = findRequest(req.course, req.requestId);
+  if (!found) throw new Error('unknown request');
+  const r = found.values;
+  const state = String(r[RQ.state]);
+  const sheet = getSheet(REQUESTS_SHEET);
+  const now = new Date();
+
+  if (req.do === 'delete') {
+    sheet.deleteRow(found.row);
+    return {};
+  }
+  if (state !== 'pending') throw new Error('request is ' + state + ': only delete is possible');
+
+  let newState, target = '';
+  switch (req.do) {
+    case 'allow':      newState = 'allowing'; break;
+    case 'refuseName': newState = 'refusingName'; break;
+    case 'back':
+    case 'forward': {
+      const pages = getPages(req.course);
+      const cur = findPage(pages, r[RQ.page]);
+      if (!cur) throw new Error('page not in list: ' + r[RQ.page]);
+      const next = pages[cur.num + (req.do === 'back' ? -1 : 1)];
+      if (!next) throw new Error(req.do === 'back' ? 'no previous page' : 'no next page');
+      newState = req.do === 'back' ? 'movingBack' : 'movingForward';
+      target = next.page;
+      break;
+    }
+    default: throw new Error('unknown do: ' + req.do);
+  }
+  // columns F..H = state, target, stateChanged
+  sheet.getRange(found.row, RQ.state + 1, 1, 3).setValues([[newState, target, now]]);
+  return {};
+}
+
 // ---------- helpers ----------
+
+// Column indexes (0-based) of the Log tab.
+const LG = { logged: 0, course: 1, student: 2, page: 3, requested: 4 };
+
+function getLogRows() {
+  return getSheet(LOG_SHEET).getDataRange().getValues().slice(1);
+}
 
 // Column indexes (0-based) of the Requests tab.
 const RQ = { requested: 0, course: 1, requestId: 2, student: 3, page: 4,
