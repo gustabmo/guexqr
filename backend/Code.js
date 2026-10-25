@@ -23,11 +23,10 @@ function doPost(e) {
 
     switch (action) {
       case 'config': return okReply(actionConfig());
-      case 'pages':  return okReply(actionPages(req.course));
+      case 'pages':  return okReply(actionPages(req));
       case 'request': return okReply(withLock(() => actionRequest(req)));
       case 'status': return okReply(actionStatus(req));
       case 'ack':    return okReply(withLock(() => actionAck(req)));
-      case 'autoUnlock': return okReply(actionAutoUnlock(req));
       case 'queue':  return okReply(actionQueue(req));
       case 'history': return okReply(actionHistory(req));
       case 'act':    return okReply(withLock(() => actionAct(req)));
@@ -48,10 +47,22 @@ function actionConfig() {
   return { course: course };
 }
 
-function actionPages(course) {
-  const pages = getPages(course).map(p => {
+// Page list. "url" is present on every page the student can open:
+// unlocked pages, plus locked pages this student already has in Log.
+// "student" is optional and must come from the studentName cookie (PROTOCOL.md §4).
+function actionPages(req) {
+  const student = normalizeName(req.student);
+  const logged = {};                      // page codes this student has in Log
+  if (student) {
+    getLogRows().forEach(r => {
+      if (String(r[LG.course]) === req.course && sameName(r[LG.student], student)) {
+        logged[String(r[LG.page])] = true;
+      }
+    });
+  }
+  const pages = getPages(req.course).map(p => {
     const out = { num: p.num, page: p.page, title: p.title, locked: p.locked };
-    if (!p.locked) out.url = p.url;       // locked URLs are only sent on allow / autoUnlock
+    if (!p.locked || logged[p.page]) out.url = p.url;
     return out;
   });
   return { pages: pages };
@@ -123,21 +134,6 @@ function actionAck(req) {
     throw new Error('nothing to acknowledge in state ' + state);
   }
   return {};
-}
-
-// Student page: unlock without a request if this student already has this page in Log.
-// "student" must come from the studentName cookie (see PROTOCOL.md, Auto-unlock).
-function actionAutoUnlock(req) {
-  const student = normalizeName(req.student);
-  if (!student) throw new Error('missing student');
-  const page = findPage(getPages(req.course), req.page);
-  if (!page) throw new Error('page not found: ' + req.page);
-  if (!page.locked) return { unlocked: true, url: page.url };
-
-  const logged = getLogRows().some(r =>
-    String(r[LG.course]) === req.course && sameName(r[LG.student], student) &&
-    String(r[LG.page]) === page.page);
-  return logged ? { unlocked: true, url: page.url } : { unlocked: false };
 }
 
 // ---------- actions — manager app ----------

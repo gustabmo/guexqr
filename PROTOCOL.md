@@ -32,10 +32,10 @@ A page code found in `Log` but no longer in the list shows `#n/a` instead of its
 Pages are identified **only by their code**, never by their number:
 
 - The student page URL carries only the code: `...?code=BtnOnClick` (no `np`).
-- Unlocks, requests and `Log` rows all store the code.
+- Requests and `Log` rows store the code.
 - The browser fetches the list (`pages`) on every page load, so changes made in
   the Sheet apply on the next page a student opens, with no deploy. Inserting,
-  removing or reordering pages never invalidates an unlock or a pending request.
+  removing or reordering pages never invalidates an unlocked page or a pending request.
 - An open page is not refreshed by itself; it sees changes on the next
   navigation or reload.
 - A code that is no longer in the list shows a "page not found" page.
@@ -91,18 +91,19 @@ Every call is an HTTP **POST** whose body is a JSON object with an `action` fiel
 - A new `request` from the same student + course replaces any existing row.
 - The browser keeps its pending `requestId` in `sessionStorage`, so a reload resumes polling instead of sending a new request.
 
-## 4. Auto-unlock
+## 4. What the browser stores, and auto-unlock
 
-A locked page that this browser has not unlocked is unlocked without a
-request when **both**:
+`Log` is the only record of what a student has unlocked. The browser stores just:
 
-1. the browser has a `studentName` cookie (written only on `allow`, i.e. a name
-   the teacher confirmed on this computer) — a name typed in the field never
-   triggers it;
-2. `Log` already has a row for this course + student (case-insensitive) + page.
+- the `studentName` cookie: written on `allow`, i.e. a name the teacher confirmed
+  on this computer; deleted on `refuseName`;
+- while a request is pending, its `requestId` in `sessionStorage`.
 
-The browser then calls `autoUnlock` (§6) and, on success, stores the unlock and
-URL as on `allow`. No request is created and no `Log` row is added.
+There is no per-page unlock cookie. On every page load the browser calls `pages`,
+sending `student` **only if it comes from the `studentName` cookie** (a name typed
+in the field is never sent there). The backend then includes the `url` of every
+page this student already has in `Log` for this course: those pages open without
+a new request, on any computer where the cookie holds that name.
 
 Known limitation, accepted: on a shared computer the cookie holds the last
 student allowed there; another student sitting there gets that student's
@@ -119,10 +120,12 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 → `{"ok": true, "course": "js2026"}`
 
 ### `pages`
-`{"action": "pages", "course": "js2026"}`
+`{"action": "pages", "course": "js2026", "student": "Léa"}` — `student` optional, from the cookie only (§4)
 → `{"ok": true, "pages": [{"num": 0, "page": "Intro", "title": "...", "locked": false, "url": "..."}, ...]}`
 
-`url` is included only for pages with `locked: false`.
+`url` is present on every page the student can open: pages with `locked: false`,
+plus locked pages that `student` already has in `Log` for this course.
+A page with `url` opens; a page without one shows the request screen.
 
 ### `request`
 `{"action": "request", "course", "requestId", "student", "page"}`
@@ -135,19 +138,15 @@ Comparisons are case-insensitive (`toLowerCase()` of the normalized name).
 | state          | extra fields              | browser does |
 |----------------|---------------------------|--------------|
 | `pending`      |                           | keep polling |
-| `allowing`     | `url`                     | store unlock + URL + `studentName` cookie, then `ack` |
+| `allowing`     | `url`                     | write the `studentName` cookie, open `url`, then `ack` |
 | `movingBack`   | `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
 | `movingForward`| `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
-| `refusingName` |                           | `ack`, show the name field, re-enable the button |
+| `refusingName` |                           | `ack`, delete the `studentName` cookie, show the name field, re-enable the button |
 | `unknown`      |                           | (deleted) re-enable the button |
 
 ### `ack`
 `{"action": "ack", "course", "requestId", "state"}` — `state` = the state being acknowledged
 → `{"ok": true}`
-
-### `autoUnlock`
-`{"action": "autoUnlock", "course", "student", "page"}` — `student` from the cookie (see §4)
-→ `{"ok": true, "unlocked": true, "url": "..."}` or `{"ok": true, "unlocked": false}`
 
 ## 7. Actions — manager app (require `"key"`)
 
@@ -156,13 +155,17 @@ untracked config file; never in the repo.
 
 ### `queue`
 `{"action": "queue", "key", "course"}`
-→ `{"ok": true, "requests": [{"requestId", "student", "page", "num", "state", "requested", "stateChanged"}, ...]}`
+→ `{"ok": true, "requests": [{"requestId", "student", "page", "num", "state", "target", "requested", "stateChanged"}, ...], "now"}`
 
 Sorted oldest first. `num` is `null` for a page not in the list (`#n/a`).
+`target` is the destination page code while `movingBack`/`movingForward`, empty otherwise.
+
+`now` (here and in `history`) is the server's clock: the app computes "time in
+queue" and the intervals between log rows from it, not from the phone's clock.
 
 ### `history`
 `{"action": "history", "key", "course", "student"}`
-→ `{"ok": true, "logs": [{"page", "num", "logged"}, ...], "students": [...]}`
+→ `{"ok": true, "logs": [{"page", "num", "logged"}, ...], "students": [...], "now"}`
 
 - `logs`: the last 5 `Log` rows for this course + student (case-insensitive), oldest first.
 - `students`: only when `logs` is empty — unique student names in `Log` for this
