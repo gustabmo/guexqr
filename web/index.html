@@ -30,8 +30,8 @@
   #reqNumber { line-height: 1; }
   #reqBig { font-size: 28vh; font-weight: bold; letter-spacing: 1vh; }
   #reqSmall { font-size: 3vh; color: #777; margin-left: 1vh; font-family: monospace; }
-  #reqName { font-size: 9vh; font-weight: bold; }
-  #reqNameInput { font-size: 6vh; padding: 1vh 2vh; width: min(80vw, 22ch); text-align: center; }
+  #reqName { font-size: 12vh; font-weight: bold; }
+  #reqNameInput { font-size: 8vh; padding: 1vh 2vh; width: min(80vw, 18ch); text-align: center; }
   #reqButton { font-size: 4vh; padding: 1.5vh 4vh; border-radius: 1vh; border: none;
                background: #2a7; color: #fff; cursor: pointer; }
   #reqButton:disabled { background: #bbb; cursor: default; }
@@ -74,7 +74,6 @@ let course = null;      // course in use
 let pages = null;       // current page list (cached, then refreshed)
 let shown = null;       // what is on screen: { kind, page, url }
 let navId = 0;          // newest navigation; older refreshes are ignored
-let formRequestId = null;
 let nameRefused = null; // name to put back in the field after "refuse name"
 let pollTimer = null;
 
@@ -226,11 +225,12 @@ function renderRequest() {
 
   document.getElementById('reqTitle').textContent = '#' + page.num + ' ' + page.title;
 
-  let id;
-  if (waiting) id = pending.requestId;
-  else { if (!formRequestId) formRequestId = newRequestId(); id = formRequestId; }
-  document.getElementById('reqBig').textContent = id.slice(0, 2);
-  document.getElementById('reqSmall').textContent = id;
+  // the request number only appears once the request has been sent
+  document.getElementById('reqNumber').hidden = !waiting;
+  if (waiting) {
+    document.getElementById('reqBig').textContent = pending.requestId.slice(0, 2);
+    document.getElementById('reqSmall').textContent = pending.requestId;
+  }
 
   const nameEl = document.getElementById('reqName');
   const input = document.getElementById('reqNameInput');
@@ -268,7 +268,7 @@ async function sendRequest() {
   const student = input.hidden ? document.getElementById('reqName').textContent : typedName();
   if (!student || !shown || shown.kind !== 'request') return;
 
-  const pending = { course: course, requestId: formRequestId, student: student, page: shown.page.page };
+  const pending = { course: course, requestId: newRequestId(), student: student, page: shown.page.page };
   setPending(pending);                 // name becomes fixed text; cookie is NOT written yet
   nameRefused = null;
   input.value = '';
@@ -276,7 +276,6 @@ async function sendRequest() {
   try {
     await api('request', { course: course, requestId: pending.requestId,
                            student: student, page: pending.page });
-    formRequestId = null;
     startPolling();
   } catch (err) {
     setPending(null);
@@ -337,14 +336,12 @@ async function handleStatus(pending, st) {
     resetUnlocks();
     setPending(null);
     nameRefused = pending.student;
-    formRequestId = null;
     go({ code: shown && shown.page ? shown.page.page : pending.page }, false);
     return;
   }
 
   // unknown: the teacher deleted the request
   setPending(null);
-  formRequestId = null;
   if (!confirmedStudent()) nameRefused = pending.student;   // give the typed name back
   if (shown && shown.kind === 'request') { renderRequest(); setStatus('Demande refusée.'); }
 }
