@@ -324,8 +324,7 @@ async function handleStatus(pending, st) {
 
   if (st.state === 'movingBack' || st.state === 'movingForward') {
     await ack();
-    pending.page = st.target;
-    setPending(pending);
+    setPending(null);
     go({ code: st.target }, true);
     return;
   }

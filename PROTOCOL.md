@@ -78,7 +78,7 @@ Every call is an HTTP **POST** whose body is a JSON object with an `action` fiel
 
     pending  ──allow──▶  allowing  ──ack──▶  (row deleted, Log row added)
        │
-       ├──back/forward──▶  movingBack/movingForward  ──ack──▶  pending (page = target)
+       ├──back/forward──▶  movingBack/movingForward  ──ack──▶  (row deleted)
        │
        ├──refuseName──▶  refusingName  ──ack──▶  (row deleted)
        │
@@ -139,8 +139,8 @@ A page with `url` opens; a page without one shows the request screen.
 |----------------|---------------------------|--------------|
 | `pending`      |                           | keep polling |
 | `allowing`     | `url`                     | write the `studentName` cookie, open `url`, then `ack` |
-| `movingBack`   | `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
-| `movingForward`| `target`, `targetNum`     | `ack`, then go to page `target` (by code) and keep polling |
+| `movingBack`   | `target`, `targetNum`     | `ack`, then go to page `target` (by code); request cleared — student re-requests if target is locked |
+| `movingForward`| `target`, `targetNum`     | `ack`, then go to page `target` (by code); request cleared — student re-requests if target is locked |
 | `refusingName` |                           | `ack`, delete the `studentName` cookie, show the name field, re-enable the button |
 | `unknown`      |                           | (deleted) re-enable the button |
 

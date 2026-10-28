@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'config.dart';
 
 class ApiException implements Exception {
@@ -10,28 +10,24 @@ class ApiException implements Exception {
 }
 
 Future<Map<String, dynamic>> _post(Map<String, dynamic> body) async {
-  final client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 15);
+  final client = http.Client();
   try {
-    final req = await client.postUrl(Uri.parse(backendUrl));
-    // Disable auto-redirect so we can follow the 302 with GET ourselves.
-    req.followRedirects = false;
-    req.headers.set('content-type', 'text/plain');
-    req.write(jsonEncode(body));
-    final resp = await req.close();
+    final req = http.Request('POST', Uri.parse(backendUrl))
+      ..headers['content-type'] = 'text/plain'
+      ..body = jsonEncode(body);
 
-    String raw;
-    if (resp.statusCode == 302) {
+    final streamed = await client.send(req);
+
+    http.Response resp;
+    if (streamed.statusCode == 302) {
       // Google Apps Script always redirects POST → GET.
-      final location = resp.headers.value('location')!;
-      final getReq = await client.getUrl(Uri.parse(location));
-      final getResp = await getReq.close();
-      raw = await getResp.transform(utf8.decoder).join();
+      final location = streamed.headers['location']!;
+      resp = await http.get(Uri.parse(location));
     } else {
-      raw = await resp.transform(utf8.decoder).join();
+      resp = await http.Response.fromStream(streamed);
     }
 
-    final data = jsonDecode(raw) as Map<String, dynamic>;
+    final data = jsonDecode(resp.body) as Map<String, dynamic>;
     if (data['ok'] != true) {
       throw ApiException(data['error'] as String? ?? 'unknown error');
     }

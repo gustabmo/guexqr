@@ -96,7 +96,7 @@ Duration format, as in the examples: under a minute `50"`; under an hour `10' 15
 | Allow | `allow` | browser unlocks, stores the name cookie, acks; then the request disappears and a Log row is added |
 | Refuse name | `refuseName` | browser deletes the name cookie, shows the name field again; request disappears after the ack |
 | Delete | `delete` | request removed at once; the browser just re-enables its button. The **only** action that does not wait for the browser |
-| Back one page | `back` | browser goes one page back; request stays, for the previous page |
+| Back one page | `back` | browser goes one page back; request deleted — student re-requests if that page is locked |
 | Forward one page | `forward` | same, one page forward |
 
 While a request waits for the browser, only Delete is possible (the backend refuses the rest).

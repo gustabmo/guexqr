@@ -3,7 +3,7 @@ import 'api.dart';
 import 'queue_screen.dart';
 
 void main() {
-  runApp(const MaterialApp(
+  runApp(MaterialApp(
     title: 'guexQR',
     theme: ThemeData(colorSchemeSeed: Colors.blue, useMaterial3: true),
     home: _AppRoot(),

@@ -126,8 +126,7 @@ function actionAck(req) {
     getSheet(LOG_SHEET).appendRow([now, r[RQ.course], r[RQ.student], r[RQ.page], r[RQ.requested]]);
     sheet.deleteRow(found.row);
   } else if (state === 'movingBack' || state === 'movingForward') {
-    // columns E..H = page, state, target, stateChanged
-    sheet.getRange(found.row, RQ.page + 1, 1, 4).setValues([[r[RQ.target], 'pending', '', now]]);
+    sheet.deleteRow(found.row);
   } else if (state === 'refusingName') {
     sheet.deleteRow(found.row);
   } else {
