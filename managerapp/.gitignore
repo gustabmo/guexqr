@@ -42,3 +42,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 /android/build/
+
+# App config with real URL and key — never commit
+lib/config.dart
